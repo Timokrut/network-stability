@@ -95,9 +95,10 @@ def main():
     p_values = [i / 10 for i in range(11)]
     exact_values = [formula_probability(p) for p in p_values]
     estimates = [[], [], []]
+    variances = [[], [], []]
     variance_sums = [0, 0, 0]
 
-    print(f'Вариант 15. N = {n}, l_min = {L_MIN}, l_max = {L_MAX}')
+    print(f'N = {n}, eps = {EPS} l_min = {L_MIN}, l_max = {L_MAX}')
     print(' p    Точно    Этап 1   Этап 2   Этап 3     Дисп. 1    Дисп. 2    Дисп. 3')
     for p, exact in zip(p_values, exact_values):
         p1, v1 = simulate(p, n)
@@ -105,6 +106,7 @@ def main():
         p3, v3 = sim3(p, n)
         for i, (value, variance) in enumerate([(p1, v1), (p2, v2), (p3, v3)]):
             estimates[i].append(value)
+            variances[i].append(variance)
             variance_sums[i] += variance
         print(f'{p:.1f}   {exact:.5f}  {p1:.5f}  {p2:.5f}  {p3:.5f}'
               f'    {v1:.2e}   {v2:.2e}   {v3:.2e}')
@@ -126,16 +128,37 @@ def main():
     plt.savefig('lab2_graph.png', dpi=160)
     plt.show()
 
-    #При p = 0 или p = 1 проверок BFS нет, поэтому N / N' не определено.
     speedup_p = [i / 100 for i in range(1, 100)]
     speedup = []
-    m = len(EDGES)
+
     for p in speedup_p:
-        check_probability = sum(
-            comb(m, j) * p**j * (1 - p)**(m - j)
-            for j in range(L_MIN, L_MAX + 1)
+        bfs_count_1 = 0
+        bfs_count_2 = 0
+
+        for _ in range(n):
+            edges = [edge for edge in EDGES if random() < p]
+
+            # Этап 1: BFS нужен всегда.
+            result_1 = has_path(edges, START, TARGET)
+            bfs_count_1 += 1
+
+            # Этап 2: иногда ответ известен без BFS.
+            if len(edges) < L_MIN:
+                result_2 = False
+            elif len(edges) > L_MAX:
+                result_2 = True
+            else:
+                result_2 = has_path(edges, START, TARGET)
+                bfs_count_2 += 1
+
+            assert result_1 == result_2
+
+        ratio = (
+            bfs_count_1 / bfs_count_2
+            if bfs_count_2 > 0
+            else float("nan")
         )
-        speedup.append(1 / check_probability)
+        speedup.append(ratio)
 
     plt.figure(figsize=(7, 4))
     plt.plot(speedup_p, speedup)
@@ -147,6 +170,21 @@ def main():
     plt.grid()
     plt.tight_layout()
     plt.savefig('lab2_speedup.png', dpi=160)
+    plt.show()
+
+    # Сравнение дисперсий оценок вероятности всех трёх методов.
+    plt.figure(figsize=(7, 4))
+    for values, label, marker in zip(variances, titles, ['o', 's', '^']):
+        plt.plot(p_values, values, marker=marker, label=label)
+    plt.xlabel('Вероятность существования ребра p')
+    plt.ylabel('Оценка дисперсии оценки вероятности')
+    plt.title('Сравнение дисперсий трёх методов')
+    plt.ticklabel_format(axis='y', style='sci', scilimits=(0, 0))
+    plt.xticks(p_values)
+    plt.grid(alpha=0.35)
+    plt.legend(fontsize=9)
+    plt.tight_layout()
+    plt.savefig('lab2_variance.png', dpi=240)
     plt.show()
 
 if __name__ == '__main__':
